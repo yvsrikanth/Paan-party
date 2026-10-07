@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 mkdirSync('.sites-runtime',{recursive:true});
-for(const [name,source] of [['model','src/model.ts'],['clipboard','src/clipboard.ts'],['worker','worker/index.ts'],['pdf','src/invoice-pdf.ts'],['component','src/app.component.ts']]) await build({entryPoints:[source],outfile:`.sites-runtime/check-${name}.mjs`,bundle:true,format:'esm',platform:'node',target:'node24',packages:'external'});
+for(const [name,source] of [['model','src/model.ts'],['clipboard','src/clipboard.ts'],['worker','worker/index.ts'],['pdf','src/invoice-pdf.ts'],['component','src/app.component.ts'],['mobile-app','src/mobile-app.ts']]) await build({entryPoints:[source],outfile:`.sites-runtime/check-${name}.mjs`,bundle:true,format:'esm',platform:'node',target:'node24',packages:'external'});
 const model=await import(pathToFileURL(process.cwd()+'/.sites-runtime/check-model.mjs'));
 const clipboard=await import(pathToFileURL(process.cwd()+'/.sites-runtime/check-clipboard.mjs'));
 const {default:worker}=await import(pathToFileURL(process.cwd()+'/.sites-runtime/check-worker.mjs'));
@@ -67,6 +67,37 @@ const long={...custom,rows:Array.from({length:100},(_,i)=>({...model.newRow(mode
 console.log('PASS: branded PDF creation and multi-page pagination.');
 await import('@angular/compiler');
 const {AppComponent}=await import(pathToFileURL(process.cwd()+'/.sites-runtime/check-component.mjs'));
+const {appHomeUrl,runningAsApp}=await import(pathToFileURL(process.cwd()+'/.sites-runtime/check-mobile-app.mjs'));
+assert.equal(appHomeUrl('https://paan.example/api/invoices/customer-id?token=private#invoice'), 'https://paan.example/');
+assert.equal(appHomeUrl('https://user:password@paan.example/login?code=secret'), 'https://paan.example/');
+assert.equal(appHomeUrl('file:///local/private'), '');assert.equal(runningAsApp(),false);
+const manifest=JSON.parse(readFileSync('public/manifest.webmanifest','utf8'));
+assert.equal(manifest.display,'standalone');assert.equal(manifest.id,'/');assert.equal(manifest.start_url,'/');
+for(const size of [192,512]){
+  const icon=manifest.icons.find(icon=>icon.sizes===`${size}x${size}`);assert(icon);
+  const png=readFileSync('public'+icon.src);assert.equal(png.readUInt32BE(16),size);assert.equal(png.readUInt32BE(20),size);
+}
+const appleIcon=readFileSync('public/icons/apple-touch-icon.png');assert.equal(appleIcon.readUInt32BE(16),180);assert.equal(appleIcon.readUInt32BE(20),180);
+const installer=new AppComponent();let prompts=0;let deferred=false;
+installer.prepareInstallation({preventDefault(){deferred=true;},async prompt(){prompts++;},userChoice:Promise.resolve({outcome:'accepted'})});
+assert(deferred);assert.equal(prompts,0);assert(installer.installAvailable());
+await installer.installApp();await installer.installApp();assert.equal(prompts,1);assert(!installer.installed());assert(!installer.installAvailable());
+installer.installationComplete();assert(installer.installed());installer.ngOnDestroy();
+const dismissedInstall=new AppComponent();dismissedInstall.prepareInstallation({preventDefault(){},async prompt(){},userChoice:Promise.resolve({outcome:'dismissed'})});
+await dismissedInstall.installApp();assert(!dismissedInstall.installed());assert(!dismissedInstall.installing());assert.match(dismissedInstall.notice(),/later/);dismissedInstall.ngOnDestroy();
+const failedInstall=new AppComponent();failedInstall.prepareInstallation({preventDefault(){},async prompt(){throw new Error('Unavailable');},userChoice:Promise.resolve({outcome:'dismissed'})});
+await failedInstall.installApp();assert(!failedInstall.installing());assert(!failedInstall.installed());assert.match(failedInstall.notice(),/steps below/);failedInstall.ngOnDestroy();
+const originalNavigator=Object.getOwnPropertyDescriptor(globalThis,'navigator');let shared;let copied='';
+try{
+  const sharingApp=new AppComponent();sharingApp.shareUrl.set(appHomeUrl('https://paan.example/invoice?login=secret'));
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{async share(data){shared=data;}}});
+  await sharingApp.shareAppLink();assert.deepEqual(shared,{title:'Paan Party Invoice',text:'Open the Paan Party invoice app.',url:'https://paan.example/'});
+  Object.defineProperty(globalThis,'navigator',{configurable:true,value:{clipboard:{async writeText(text){copied=text;}}}});
+  await sharingApp.shareAppLink();assert.equal(copied,'https://paan.example/');
+  copied='';Object.defineProperty(globalThis,'navigator',{configurable:true,value:{async share(){throw new DOMException('Cancelled','AbortError');},clipboard:{async writeText(text){copied=text;}}}});
+  await sharingApp.shareAppLink();assert.equal(copied,'');assert(!sharingApp.sharing());sharingApp.ngOnDestroy();
+}finally{if(originalNavigator)Object.defineProperty(globalThis,'navigator',originalNavigator);else delete globalThis.navigator;}
+console.log('PASS: installable manifest/icon sizes, accepted/dismissed/failed installation handling, single-use browser prompts, clean app links, native sharing and clipboard fallback.');
 const app=new AppComponent();app.draft.set({...doc,rows:series});app.request=async()=>({revision:app.revision+1,updatedAt:new Date().toISOString()});
 app.startFill({preventDefault(){},stopPropagation(){}},0);app.drag.set({from:0,to:2});app.finishFill();assert.deepEqual(app.draft().rows.map(r=>r.date),['2028-02-28','2028-02-29','2028-03-01']);assert.equal(await app.saveNow(),true);assert.equal(app.state(),'saved');
 app.fillCount=4;app.fillStep=7;app.fillDates();assert.equal(app.draft().rows.length,4);assert.equal(app.draft().rows[3].date,'2028-03-20');

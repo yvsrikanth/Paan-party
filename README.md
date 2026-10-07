@@ -20,9 +20,11 @@ npm run check
 npm run build
 ```
 
-Checks cover rate validation and cent-accurate totals, Excel clipboard parsing and limits, quantity/date logic, Angular component actions, database persistence, ownership, concurrent saves, PDF pagination, and Cloudflare authentication. Live browser interactions and deployment in your own Cloudflare account have not been tested.
+Checks cover rate validation and cent-accurate totals, Excel clipboard parsing and limits, quantity/date logic, Angular component actions, database persistence, ownership, concurrent saves, PDF pagination, Cloudflare authentication, installation events and clean sharing links. Deployment, sign-in and home-screen installation on your actual phones still need verification in your own Cloudflare account.
 
 ## Use the app
+
+The app can be shared to Android and iPhone and added to each phone's home screen after HTTPS deployment. Choose **Install / share** for installation instructions and the share link. See [HOME-SCREEN.md](HOME-SCREEN.md). An internet connection is required; invoices remain separate for each approved sign-in.
 
 1. Enter Bill to, invoice number and date.
 2. Set Rates per paan in Invoice details, then enter dated whole-number quantities. Rates are saved with each invoice and reused for the next new invoice; earlier invoices without rate fields keep $2/$3.
@@ -38,6 +40,10 @@ Copy a rectangular Excel range and paste into the first target Date, Meetha or F
 Dates accept YYYY-MM-DD, US month/day/year, named months such as 05-Aug-26, and Excel's 1900-system serial dates. Quantities must be whole numbers; blank quantity cells become zero. Invalid blocks are rejected without changing existing cells. Paste overwrites the target cells, leaves cells outside the pasted range intact, and supports up to 500 invoice rows.
 
 ## GitHub and hosting
+
+The source is maintained in [yvsrikanth/Paan-party](https://github.com/yvsrikanth/Paan-party). Connect this repository's `main` branch in Cloudflare Workers Builds.
+
+Using only a phone? Follow [PHONE.md](PHONE.md) for GitHub and Cloudflare dashboard setup. The package includes a Console database setup script and a Node.js 24 version file for cloud builds.
 
 See [GITHUB.md](GITHUB.md) to save this project to your account. GitHub Actions checks and builds it; publication is separate.
 

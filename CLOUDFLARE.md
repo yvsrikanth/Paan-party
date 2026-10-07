@@ -1,5 +1,7 @@
 # Deploy on Cloudflare's free tiers
 
+For setup from a phone, use [PHONE.md](PHONE.md). The steps below use a computer terminal.
+
 Use Workers Free, a D1 database and Zero Trust Free for private sign-in. Cloudflare supplies a `workers.dev` URL; a purchased domain is optional. These services have usage limits, so select the free plans and monitor your usage.
 
 ## Start without a purchased domain
@@ -34,6 +36,8 @@ Wrangler prints your URL. Until sign-in setup is finished, this deployment retur
 ## 3. Enable private sign-in
 
 Open **Workers & Pages > paan-party > Access**. Choose **Protect this Worker behind Access**, choose **All traffic**, and configure an authentication policy allowing your account. Apply Access. Use Zero Trust Free when prompted to choose a plan.
+
+For your partner's phone, add both approved sign-in emails to the Allow policy's **Include > Emails** rule. This lets both people use the app, with separate invoices per identity. After deployment, see [HOME-SCREEN.md](HOME-SCREEN.md) for installing and sharing the app on Android and iPhone.
 
 Verify that sign-in protects the actual `workers.dev` URL. Worker-wide **All traffic** protection also covers custom domains added later. If you instead use a hostname-based Access application, configure it for the actual hostname and allow your sign-in email. The app rejects requests without a valid token for the configured AUD.
 

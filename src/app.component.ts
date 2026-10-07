@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Invoice, Delivery, newInvoice, newRow, totals, rowAmount, rateValid, ledgerError, invoiceError, filledRows, addDays, validDate, today, cleanInvoice, MEETHA_PRICE, FLAVOUR_PRICE } from './model';
 import { LedgerColumn, pasteLedgerCells, copyLedgerCells } from './clipboard';
+import { InstallPromptEvent, appHomeUrl, runningAsApp } from './mobile-app';
 
 interface SavedInvoice { id:string; billTo:string; invoiceNo:string; updatedAt:string; }
 type SaveState = 'new'|'changed'|'saving'|'saved'|'error';
@@ -29,6 +30,11 @@ export class AppComponent implements OnInit,OnDestroy {
   pdfBusy=signal(false);
   previewOpen=signal(false);
   resetting=signal(false);
+  installed=signal(false);
+  installAvailable=signal(false);
+  installing=signal(false);
+  sharing=signal(false);
+  shareUrl=signal('');
   revision=0;
   private editVersion=0;
   private savedEditVersion=0;
@@ -37,16 +43,50 @@ export class AppComponent implements OnInit,OnDestroy {
   private savingPromise:Promise<boolean>|undefined;
   private reorderId='';
   private lifecycle=new AbortController();
+  private installPrompt:InstallPromptEvent|null=null;
   @ViewChild('invoiceDialog') dialog!:ElementRef<HTMLDialogElement>;
   @ViewChild('newDialog') newDialog!:ElementRef<HTMLDialogElement>;
   @ViewChild('pasteDialog') pasteDialog!:ElementRef<HTMLDialogElement>;
   @ViewChild('resetDialog') resetDialog!:ElementRef<HTMLDialogElement>;
+  @ViewChild('installDialog') installDialog!:ElementRef<HTMLDialogElement>;
   validRate=rateValid;
   amount(row:Delivery) {return rowAmount(row,this.draft());}
   money(n:number) {return Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'—';}
   displayDate(s:string) {return validDate(s)?new Intl.DateTimeFormat('en-US',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(s+'T12:00:00Z')):'—';}
-  async ngOnInit() {await this.load();this.registerTools();}
-  ngOnDestroy() {clearTimeout(this.timer);clearTimeout(this.noticeTimer);this.lifecycle.abort();}
+  async ngOnInit() {this.installed.set(runningAsApp());this.shareUrl.set(appHomeUrl(window.location.href));await this.load();this.registerTools();}
+  ngOnDestroy() {clearTimeout(this.timer);clearTimeout(this.noticeTimer);this.lifecycle.abort();this.installPrompt=null;}
+  @HostListener('window:beforeinstallprompt',['$event']) prepareInstallation(event:Event) {
+    const prompt=event as InstallPromptEvent;
+    if(this.installed()||typeof prompt.prompt!=='function'||!prompt.userChoice)return;
+    event.preventDefault();this.installPrompt=prompt;this.installAvailable.set(true);
+  }
+  @HostListener('window:appinstalled') installationComplete() {
+    this.installed.set(true);this.installPrompt=null;this.installAvailable.set(false);
+    this.toast('Paan Party has been added to your apps.');
+  }
+  openInstallation(){this.installDialog.nativeElement.showModal();}
+  async installApp() {
+    const prompt=this.installPrompt;if(!prompt||this.installing())return;
+    this.installPrompt=null;this.installAvailable.set(false);this.installing.set(true);
+    try {
+      await prompt.prompt();const choice=await prompt.userChoice;
+      this.toast(choice.outcome==='accepted'?'Installation requested. Follow your browser’s prompts.':'You can add Paan Party later using your browser menu.');
+    }catch{this.toast('Use the Android or iPhone steps below to add Paan Party.');}
+    finally{this.installing.set(false);}
+  }
+  async shareAppLink() {
+    const url=this.shareUrl();if(!url||this.sharing())return;
+    this.sharing.set(true);
+    try {
+      if(navigator.share) {
+        try{await navigator.share({title:'Paan Party Invoice',text:'Open the Paan Party invoice app.',url});return;}
+        catch(e){if(e instanceof Error&&e.name==='AbortError')return;}
+      }
+      if(!navigator.clipboard?.writeText)throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(url);this.toast('App link copied. Send it to your partner.');
+    }catch{this.toast('Select and copy the app link below to share it.');}
+    finally{this.sharing.set(false);}
+  }
   async request(path:string,options:RequestInit={}) {
     const res=await fetch(path,{...options,headers:{'Content-Type':'application/json',...options.headers}});
     const data=await res.json().catch(()=>({error:'The server returned an unreadable response.'}));
