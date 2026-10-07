@@ -31,6 +31,14 @@ const excel='Delivery date\tMeetha\tFlavour\r\n"05-Aug-26"\t"1,000"\t2\r\n8/19/2
 const pasted=clipboard.pasteLedgerCells(base,0,'date',excel);assert.equal(pasted.cellCount,6);assert.equal(pasted.rows.length,2);
 assert.deepEqual(pasted.rows.map(r=>[r.date,r.meetha,r.flavour]),[['2026-08-05',1000,2],['2026-08-19',25,0]]);assert.deepEqual(base,original);
 const roundTrip=clipboard.pasteLedgerCells([model.newRow()],0,'date',clipboard.copyLedgerCells(pasted.rows));assert.deepEqual(roundTrip.rows.map(r=>[r.date,r.meetha,r.flavour]),pasted.rows.map(r=>[r.date,r.meetha,r.flavour]));
+const headedExcel='Date\tMeeth Quantity\tFlavor Quantity\r\n01-Apr-26\t10\t\r\n03-Apr-26\t7\t\r\n06-Apr-26\t5\t8\r\n09-Apr-26\t12\t\r\n12-Apr-26\t6\t\r\n';
+const headedPaste=clipboard.pasteLedgerCells(base,0,'date',headedExcel);
+assert.deepEqual(headedPaste.rows.map(r=>[r.date,r.meetha,r.flavour]),[['2026-04-01',10,0],['2026-04-03',7,0],['2026-04-06',5,8],['2026-04-09',12,0],['2026-04-12',6,0]]);
+assert.equal(headedPaste.rowCount,5);assert.equal(headedPaste.cellCount,15);assert.equal(model.totals(headedPaste.rows).grandTotal,104);assert.deepEqual(base,original);
+for(const heading of ['Meetha Quantity','Meeta Quantity','Meeth Quantity'])assert.equal(clipboard.pasteLedgerCells(base,0,'date',headedExcel.replace('Meeth Quantity',heading)).rows[0].meetha,10);
+const quantitiesWithHeaders=clipboard.pasteLedgerCells(base,0,'meetha','Meeth Quantity\tFlavor Quantity\n10\t19');assert.equal(quantitiesWithHeaders.rows[0].date,base[0].date);assert.equal(quantitiesWithHeaders.rows[0].flavour,19);
+assert.throws(()=>clipboard.pasteLedgerCells(base,0,'date','Date\tMeeth Quantity\tFlavor Quantity'),/headings but no delivery cells/);
+assert.throws(()=>clipboard.pasteLedgerCells(base,0,'date','Date\tFlavor Quantity\tMeeth Quantity\n02-Apr-26\t40\t19'));assert.deepEqual(base,original);
 const partial=clipboard.pasteLedgerCells(pasted.rows,1,'meetha','10\t3\n12\t4');assert.equal(partial.rows[1].date,'2026-08-19');assert.equal(partial.rows[2].date,'');assert.equal(partial.rows[2].flavour,4);
 assert.equal(clipboard.pasteLedgerCells(base,0,'flavour','6').rows[0].meetha,7);
 assert.equal(clipboard.excelDate('25569'),'1970-01-01');assert.equal(clipboard.excelDate('1'),'1900-01-01');assert.equal(clipboard.excelDate('59'),'1900-02-28');assert.equal(clipboard.excelDate('61'),'1900-03-01');assert.equal(clipboard.excelDate('2/29/28'),'2028-02-29');assert.equal(clipboard.excelDate('October 2, 2026'),'2026-10-02');
@@ -67,6 +75,10 @@ const long={...custom,rows:Array.from({length:100},(_,i)=>({...model.newRow(mode
 console.log('PASS: branded PDF creation and multi-page pagination.');
 await import('@angular/compiler');
 const {AppComponent}=await import(pathToFileURL(process.cwd()+'/.sites-runtime/check-component.mjs'));
+const pasteDialogApp=new AppComponent();let pasteDialogClosed=false;
+pasteDialogApp.draft.set({...doc,rows:[model.newRow()]});pasteDialogApp.pasteDialog={nativeElement:{close(){pasteDialogClosed=true;}}};pasteDialogApp.clipboardText=headedExcel;
+pasteDialogApp.pasteFromDialog();assert(pasteDialogClosed);assert.equal(pasteDialogApp.clipboardError(),'');assert.equal(pasteDialogApp.draft().rows.length,5);assert.equal(pasteDialogApp.summary().grandTotal,104);pasteDialogApp.ngOnDestroy();
+console.log('PASS: Excel heading spellings, blank flavour cells, April dates/totals, partial-column headings, rejected reordered headings and paste dialog import.');
 const {appHomeUrl,runningAsApp}=await import(pathToFileURL(process.cwd()+'/.sites-runtime/check-mobile-app.mjs'));
 assert.equal(appHomeUrl('https://paan.example/api/invoices/customer-id?token=private#invoice'), 'https://paan.example/');
 assert.equal(appHomeUrl('https://user:password@paan.example/login?code=secret'), 'https://paan.example/');

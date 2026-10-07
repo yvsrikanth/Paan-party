@@ -61,7 +61,7 @@ function excelQuantity(value: string): number {
 
 function isHeader(value: string,column: LedgerColumn): boolean {
   const s=value.trim().toLowerCase().replace(/\s+/g,' ');
-  return column==='date'?/^(delivery )?date$/.test(s):column==='meetha'?/^meeth?a( quantity)?$/.test(s):/^flavou?r( quantity)?$/.test(s);
+  return column==='date'?/^(delivery )?date$/.test(s):column==='meetha'?/^(?:meeta|meetha|meeth)( quantity)?$/.test(s):/^flavou?r( quantity)?$/.test(s);
 }
 
 export function pasteLedgerCells(rows: Delivery[],start: number,column: LedgerColumn,text: string) {
