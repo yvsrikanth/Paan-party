@@ -99,14 +99,23 @@ function excelQuantity(value: string): number {
 
 function isHeader(value: string,column: LedgerColumn): boolean {
   const s=value.trim().toLowerCase().replace(/\s+/g,' ');
-  return column==='date'?/^(delivery )?date$/.test(s):column==='meetha'?/^(?:meeta|meetha|meeth)( quantity)?$/.test(s):/^flavou?r( quantity)?$/.test(s);
+  return column==='date'?/^(delivery )?date$/.test(s):column==='meetha'?/^me{2,3}th?a?( quantity)?$/.test(s):/^flavou?r( quantity)?$/.test(s);
 }
 
 export function pasteLedgerCells(rows: Delivery[],start: number,column: LedgerColumn,text: string,dateOrder: ExcelDateOrder='auto') {
   const offset=columns.indexOf(column);
   if(!Number.isInteger(start)||start<0||start>=rows.length||offset<0)throw new Error('Select a delivery cell first.');
   const cells=clipboardTable(text);
-  if(cells[0].length<=3-offset&&cells[0].every((c,i)=>isHeader(c,columns[offset+i])))cells.shift();
+  const header=cells[0];
+  if(header.some(value=>columns.some(key=>isHeader(value,key)))){
+    if(header.length>3-offset)throw new Error('The heading row has too many columns. Copy only Date, Meetha and Flavour, or paste only the data rows.');
+    const incorrect=header.findIndex((value,index)=>!isHeader(value,columns[offset+index]));
+    if(incorrect>=0){
+      const expected=columns[offset+incorrect];
+      throw new Error(`Heading ${incorrect+1}: use "${expected==='date'?'Date':expected==='meetha'?'Meetha':'Flavour'}" in this column, or paste only the data rows. Column order is Date, Meetha, Flavour.`);
+    }
+    cells.shift();
+  }
   if(!cells.length)throw new Error('The copied range has headings but no delivery cells.');
   if(start+cells.length>500)throw new Error('An invoice can contain up to 500 delivery rows.');
   const width=cells[0].length;
