@@ -2,7 +2,7 @@ import { Component, computed, signal, HostListener, ElementRef, ViewChild, OnIni
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Invoice, Delivery, newInvoice, newRow, totals, rowAmount, rateValid, ledgerError, invoiceError, filledRows, addDays, validDate, today, cleanInvoice, MEETHA_PRICE, FLAVOUR_PRICE } from './model';
-import { LedgerColumn, pasteLedgerCells, copyLedgerCells } from './clipboard';
+import { LedgerColumn, ExcelDateOrder, pasteLedgerCells, copyLedgerCells } from './clipboard';
 import { InstallPromptEvent, appHomeUrl, runningAsApp } from './mobile-app';
 
 interface SavedInvoice { id:string; billTo:string; invoiceNo:string; updatedAt:string; }
@@ -21,8 +21,16 @@ export class AppComponent implements OnInit,OnDestroy {
   notice=signal('');
   activeDate=signal(0);
   activeColumn=signal<LedgerColumn>('date');
-  clipboardText='';
+  clipboardText=signal('');
+  excelDateOrder=signal<ExcelDateOrder>('auto');
   clipboardError=signal('');
+  clipboardPreview=computed(()=>{
+    if(this.activeColumn()!=='date'||!this.clipboardText().trim())return null;
+    try{
+      const start=this.activeDate();const pasted=pasteLedgerCells(this.draft().rows,start,'date',this.clipboardText(),this.excelDateOrder());
+      return {rowCount:pasted.rowCount,dateOrder:pasted.dateOrder,dates:pasted.rows.slice(start,start+pasted.rowCount).filter(row=>row.date).slice(0,3).map(row=>this.displayDate(row.date)).join(' · ')};
+    }catch{return null;}
+  });
   drag=signal<{from:number;to:number}|null>(null);
   fillOpen=signal(false);
   fillCount=5;
@@ -128,13 +136,15 @@ export class AppComponent implements OnInit,OnDestroy {
     try{this.insertCells(text,this.draft().rows.findIndex(row=>row.id===id),column);}
     catch(e){this.toast(this.message(e));}
   }
-  openPasteCells() {this.clipboardText='';this.clipboardError.set('');this.pasteDialog.nativeElement.showModal();}
+  openPasteCells() {this.clipboardText.set('');this.clipboardError.set('');this.pasteDialog.nativeElement.showModal();}
+  setClipboardText(text:string) {this.clipboardText.set(text);this.clipboardError.set('');}
+  setExcelDateOrder(order:ExcelDateOrder) {this.excelDateOrder.set(order);this.clipboardError.set('');}
   pasteFromDialog() {
-    try{this.insertCells(this.clipboardText,this.activeDate(),this.activeColumn());this.pasteDialog.nativeElement.close();}
+    try{this.insertCells(this.clipboardText(),this.activeDate(),this.activeColumn());this.pasteDialog.nativeElement.close();}
     catch(e){this.clipboardError.set(this.message(e));}
   }
   private insertCells(text:string,index:number,column:LedgerColumn) {
-    const pasted=pasteLedgerCells(this.draft().rows,index,column,text);
+    const pasted=pasteLedgerCells(this.draft().rows,index,column,text,this.excelDateOrder());
     this.change({...this.draft(),rows:pasted.rows});this.focusCell(index,column);
     this.toast(`${pasted.cellCount} cell${pasted.cellCount===1?'':'s'} pasted across ${pasted.rowCount} row${pasted.rowCount===1?'':'s'}.`);
   }
@@ -235,7 +245,7 @@ export class AppComponent implements OnInit,OnDestroy {
       if(this.savingPromise)await this.savingPromise;
       const current=this.draft();
       this.change({...current,billTo:'',invoiceNo:'',invoiceDate:today(),meethaRate:rateValid(current.meethaRate)?current.meethaRate:MEETHA_PRICE,flavourRate:rateValid(current.flavourRate)?current.flavourRate:FLAVOUR_PRICE,rows:Array.from({length:5},()=>newRow())});
-      this.drag.set(null);this.reorderId='';this.focusCell(0,'date');this.fillOpen.set(false);this.fillCount=5;this.fillStep=1;this.clipboardText='';this.clipboardError.set('');
+      this.drag.set(null);this.reorderId='';this.focusCell(0,'date');this.fillOpen.set(false);this.fillCount=5;this.fillStep=1;this.clipboardText.set('');this.clipboardError.set('');
       const saved=await this.saveNow();
       this.resetDialog.nativeElement.close();
       this.toast(saved?'Current invoice cleared.':'Entries cleared on this page. Use Save now to retry saving.');
