@@ -7,5 +7,5 @@
   "preview_urls": false,
   "assets": { "directory": "dist/client", "binding": "ASSETS", "run_worker_first": true, "not_found_handling": "single-page-application" },
   "d1_databases": [{ "binding": "DB", "database_name": "paan-party-db", "database_id": "c920b2de-0b14-4bef-9ad7-c32b68bc847c", "migrations_dir": "drizzle" }],
-  "vars": { "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" }
+  "vars": { "ACCESS_TEAM_DOMAIN": "https://silent-boat-be52.cloudflareaccess.com", "ACCESS_AUD": "d0a89784ffa7e651b4b70c07338fbbfacf5dcde66c1f55d07fe375c22a16438d" }
 }
