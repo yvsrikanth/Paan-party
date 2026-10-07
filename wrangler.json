@@ -6,6 +6,6 @@
   "workers_dev": true,
   "preview_urls": false,
   "assets": { "directory": "dist/client", "binding": "ASSETS", "run_worker_first": true, "not_found_handling": "single-page-application" },
-  "d1_databases": [{ "binding": "DB", "database_name": "paan-party-db", "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID", "migrations_dir": "drizzle" }],
+  "d1_databases": [{ "binding": "DB", "database_name": "paan-party-db", "database_id": "c920b2de-0b14-4bef-9ad7-c32b68bc847c", "migrations_dir": "drizzle" }],
   "vars": { "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" }
 }
