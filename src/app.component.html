@@ -1,0 +1,92 @@
+<header class="app-header">
+  <div class="header-inner">
+    <a class="brand" href="/" aria-label="Paan Party home"><img src="/paan-party-logo.png" alt="Paan Party logo"><span>Paan Party<small>DELIVERIES & INVOICES</small></span></a>
+    <div class="header-right"><span class="business-label">PAAN PARTY LLC</span></div>
+  </div>
+</header>
+<main class="workspace" [class.is-filling]="drag()">
+  <div class="page-heading">
+    <div><div class="eyebrow">ORDERS & INVOICES</div><h1>Delivery ledger</h1></div>
+    <div class="heading-actions">
+      <button class="btn secondary reset-button" (click)="openReset()" [disabled]="loading() || !!loadError() || resetting() || pdfBusy()">Reset</button>
+      <button class="btn secondary" (click)="newDialog.showModal()" [disabled]="loading() || !!loadError()"><span class="plus">+</span> New invoice</button>
+      <button class="btn primary" (click)="openInvoice()" [disabled]="loading() || !!loadError()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/></svg>Generate invoice</button>
+    </div>
+  </div>
+  @if (loadError()) {
+    <div class="alert" role="alert"><div><strong>Your invoices couldn’t be loaded.</strong><p>{{loadError()}} Your entries will appear when the connection is restored.</p></div><button class="btn secondary" (click)="load()">Try again</button></div>
+  }
+  <div class="stats-strip" aria-label="Live totals">
+    <section class="stat"><span class="stat-label"><span class="type-mark meetha-mark">M</span> Meetha paans</span><div class="stat-values"><strong>{{summary().meetha | number}}</strong><span>{{money(summary().meethaAmount)}}</span></div><small>{{money(draft().meethaRate)}} per paan</small></section>
+    <section class="stat"><span class="stat-label"><span class="type-mark flavour-mark">F</span> Flavour paans</span><div class="stat-values"><strong>{{summary().flavour | number}}</strong><span>{{money(summary().flavourAmount)}}</span></div><small>{{money(draft().flavourRate)}} per paan</small></section>
+    <section class="stat total-stat"><span class="stat-label">Grand total <span class="currency-label">USD</span></span><div class="stat-values"><strong>{{money(summary().grandTotal)}}</strong></div><small>{{summary().meetha+summary().flavour | number}} paans · {{deliveries().length}} deliveries</small></section>
+  </div>
+  <div class="content-grid">
+    <section class="ledger panel" aria-labelledby="deliveries-title">
+      <div class="panel-heading"><div><h2 id="deliveries-title">Delivery entries</h2><p>Enter quantities. We’ll do the counting.</p></div><div class="ledger-tools"><button class="text-button" (click)="copyEntries()" [disabled]="loading() || !!loadError()">Copy entries</button><button class="text-button" (click)="openPasteCells()" [disabled]="loading() || !!loadError()">Paste cells</button><button class="text-button" (click)="fillOpen.set(!fillOpen())" [attr.aria-expanded]="fillOpen()" [disabled]="loading() || !!loadError()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v15H4zM4 9h16M8 3v4M16 3v4M8 13h3M8 16h3M14 13h3"/></svg>Fill dates</button></div></div>
+      @if (fillOpen()) {
+        <div class="fill-controls"><div><strong>Fill from row {{activeDate()+1}}</strong><small>Starting date: {{displayDate(draft().rows[activeDate()].date)}}</small></div><label>Dates<input type="number" min="1" max="500" [(ngModel)]="fillCount" aria-label="Number of dates to fill"></label><label>Every (days)<input type="number" min="1" max="365" [(ngModel)]="fillStep" aria-label="Days between filled dates"></label><button class="btn primary small" (click)="fillDates()">Fill dates</button></div>
+      }
+      <fieldset class="ledger-fieldset" [disabled]="loading() || !!loadError()">
+      <div class="table-scroll"><table class="entry-table"><colgroup><col class="index-col"><col class="date-col"><col><col><col class="amount-col"><col class="delete-col"></colgroup>
+        <thead><tr><th aria-label="Row"></th><th scope="col">Delivery date</th><th scope="col">Meetha <small>{{money(draft().meethaRate)}} / each</small></th><th scope="col">Flavour <small>{{money(draft().flavourRate)}} / each</small></th><th scope="col" class="right">Amount</th><th aria-label="Actions"></th></tr></thead>
+        <tbody>
+        @for (row of draft().rows; track row.id; let i=$index) {
+          <tr (dragover)="$event.preventDefault()" (drop)="dropRow($event,row.id)">
+            <td class="row-index"><button class="row-grip" draggable="true" (dragstart)="startReorder($event,row.id)" (keydown.arrowup)="moveRow(row.id,-1);$event.preventDefault()" (keydown.arrowdown)="moveRow(row.id,1);$event.preventDefault()" [attr.aria-label]="'Move row '+(i+1)+'. Use up or down arrow keys.'" title="Drag to move row; use arrow keys on keyboard"><span class="grip-dots">⠿</span><span>{{i+1}}</span></button></td>
+            <td [attr.data-date-row]="i" class="date-cell" [class.selected]="activeDate()===i" [class.fill-selected]="isFillRow(i)">
+              <input type="date" min="1900-01-01" max="9999-12-31" [ngModel]="row.date" (ngModelChange)="rowField(row.id,'date',$event)" (focus)="focusCell(i,'date')" (paste)="pasteCells($event,row.id,'date')" [attr.aria-label]="'Delivery date, row '+(i+1)">
+              <button type="button" class="fill-handle" (pointerdown)="startFill($event,i)" (click)="focusCell(i,'date');fillOpen.set(true)" [attr.aria-label]="'Fill following dates from row '+(i+1)" title="Drag down to fill consecutive dates"></button>
+            </td>
+            <td><input class="quantity" type="number" min="0" max="1000000" step="1" inputmode="numeric" [ngModel]="row.meetha" (ngModelChange)="rowField(row.id,'meetha',$event)" (focus)="focusCell(i,'meetha')" (paste)="pasteCells($event,row.id,'meetha')" [attr.aria-label]="'Meetha quantity, row '+(i+1)"></td>
+            <td><input class="quantity" type="number" min="0" max="1000000" step="1" inputmode="numeric" [ngModel]="row.flavour" (ngModelChange)="rowField(row.id,'flavour',$event)" (focus)="focusCell(i,'flavour')" (paste)="pasteCells($event,row.id,'flavour')" [attr.aria-label]="'Flavour quantity, row '+(i+1)"></td>
+            <td class="row-amount right">{{money(amount(row))}}</td>
+            <td><button class="icon-button delete" (click)="removeRow(row.id)" [attr.aria-label]="'Delete delivery row '+(i+1)" title="Delete row"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 3h6l1 4M7 7l1 14h8l1-14M10 11v6M14 11v6"/></svg></button></td>
+          </tr>
+        }
+        </tbody>
+        <tfoot><tr><td></td><th scope="row">Total</th><td>{{summary().meetha | number}}</td><td>{{summary().flavour | number}}</td><td class="right">{{money(summary().grandTotal)}}</td><td></td></tr></tfoot>
+      </table></div>
+      <div class="ledger-bottom"><button class="text-button add-row" (click)="addRow()"><span class="plus">+</span>Add delivery</button><span class="row-count">{{draft().rows.length}} rows</span></div>
+      </fieldset>
+      <div class="table-tip"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v10l-2-2-3 2 6 8h8l4-9-3-1-1 2V8l-3-1-1 3V5z"/></svg><span>Paste Excel cells into a date or quantity cell, or use <strong>Paste cells</strong>. Drag a date cell’s corner to fill consecutive dates, or use <strong>Fill dates</strong>.</span></div>
+      @if (error()) {<p class="inline-error" id="ledger-error" role="alert">{{error()}}</p>}
+    </section>
+    <aside class="invoice-details panel" aria-labelledby="invoice-details-title">
+      <div class="panel-heading"><h2 id="invoice-details-title">Invoice details</h2><span class="paper-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/></svg></span></div>
+      <fieldset [disabled]="loading() || !!loadError()">
+      <label>Bill to <span class="required">*</span><input type="text" maxlength="200" placeholder="Customer or business name" [ngModel]="draft().billTo" (ngModelChange)="field('billTo',$event)"></label>
+      <label>Invoice number <span class="required">*</span><input type="text" maxlength="200" [ngModel]="draft().invoiceNo" (ngModelChange)="field('invoiceNo',$event)"></label>
+      <label>Invoice date <span class="required">*</span><input type="date" min="1900-01-01" max="9999-12-31" [ngModel]="draft().invoiceDate" (ngModelChange)="field('invoiceDate',$event)"></label>
+      <section class="invoice-rates" aria-labelledby="rates-title"><h3 id="rates-title">Rates per paan</h3><div class="rate-fields"><label>Meetha ($)<input type="number" min="0" max="10000" step="0.01" inputmode="decimal" [ngModel]="draft().meethaRate" (ngModelChange)="rateField('meethaRate',$event)" [attr.aria-invalid]="!validRate(draft().meethaRate)" [attr.aria-describedby]="validRate(draft().meethaRate)?'rates-help':'rates-help ledger-error'"></label><label>Flavour ($)<input type="number" min="0" max="10000" step="0.01" inputmode="decimal" [ngModel]="draft().flavourRate" (ngModelChange)="rateField('flavourRate',$event)" [attr.aria-invalid]="!validRate(draft().flavourRate)" [attr.aria-describedby]="validRate(draft().flavourRate)?'rates-help':'rates-help ledger-error'"></label></div><p id="rates-help">Saved with this invoice. Up to 2 decimal places.</p></section>
+      <div class="business-divider"></div>
+      <label class="business-address">Business address<textarea maxlength="500" rows="2" [ngModel]="draft().address" (ngModelChange)="field('address',$event)"></textarea></label>
+      </fieldset>
+      <div class="invoice-note"><span>Made for Paan Party.</span><small>Your logo, item totals, and delivery breakdown are included on every invoice.</small></div>
+    </aside>
+  </div>
+  <div class="save-bar" role="status"><div class="save-status" [class.save-failed]="state()==='error'">@if(loading()){<span class="spinner"></span>Loading your invoices…} @else if(state()==='saving'){<span class="spinner"></span>Saving…} @else if(state()==='saved'){<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>All changes saved} @else if(state()==='error'){<span>Changes haven’t been saved.</span>} @else if(state()==='changed'){<span>Unsaved changes</span>} @else {<span>Your invoice will save as you enter it.</span>}</div><button class="text-button" (click)="saveNow()" [disabled]="loading() || state()==='saving' || state()==='saved' || state()==='new' || !!loadError()">{{state()==='error'?'Retry save':'Save now'}}</button></div>
+  @if(saveError()){<div class="alert save-error" role="alert">{{saveError()}} Your entries are still on this page.</div>}
+  @if(saved().length){<div class="saved-switch"><label for="saved-invoice">Saved invoices</label><select id="saved-invoice" [ngModel]="draft().id" (ngModelChange)="switchInvoice($event)" [disabled]="loading() || state()==='saving'"><option [value]="draft().id">Current · {{draft().billTo || 'Untitled invoice'}} · {{draft().invoiceNo}}</option>@for(item of saved();track item.id){@if(item.id!==draft().id){<option [value]="item.id">{{item.billTo || 'Untitled invoice'}} · {{item.invoiceNo}}</option>}}</select></div>}
+  <footer class="workspace-footer"><span>Paan Party LLC</span><span>Meetha {{money(draft().meethaRate)}} · Flavour {{money(draft().flavourRate)}} · All amounts in USD</span></footer>
+</main>
+<dialog #newDialog class="confirm-dialog"><div><span class="eyebrow">NEXT INVOICE</span><h2>Start a new invoice?</h2><p>Your current invoice will be saved. You can return to it from Saved invoices.</p><div class="confirm-actions"><button class="btn secondary" (click)="newDialog.close()">Keep editing</button><button class="btn primary" (click)="confirmNew()">New invoice</button></div></div></dialog>
+<dialog #resetDialog class="confirm-dialog reset-dialog" aria-labelledby="reset-title" aria-describedby="reset-description" (cancel)="resetting() ? $event.preventDefault() : null"><div><h2 id="reset-title">Clear the current invoice?</h2><p id="reset-description">This clears the customer, invoice number, delivery dates, quantities and totals. The invoice date returns to today. It also clears these entries in the current saved invoice.</p><p>Your rates, business address and other saved invoices are kept.</p><div class="confirm-actions"><button class="btn secondary" (click)="resetDialog.close()" [disabled]="resetting()" autofocus>Cancel</button><button class="btn reset-action" (click)="confirmReset()" [disabled]="resetting()">{{resetting()?'Clearing…':'Clear invoice'}}</button></div></div></dialog>
+<dialog #pasteDialog class="confirm-dialog paste-dialog" aria-labelledby="paste-title"><div><h2 id="paste-title">Paste Excel cells</h2><p id="paste-help">Starts at row {{activeDate()+1}}, {{columnLabel(activeColumn())}}. Column order: Date, Meetha, Flavour. Extra rows are added automatically.</p><label for="clipboard-cells">Copied cells<textarea id="clipboard-cells" rows="6" [(ngModel)]="clipboardText" placeholder="Paste cells copied from Excel" aria-describedby="paste-help"></textarea></label>@if(clipboardError()){<p class="paste-error" role="alert">{{clipboardError()}}</p>}<div class="confirm-actions"><button class="btn secondary" (click)="pasteDialog.close()">Cancel</button><button class="btn primary" (click)="pasteFromDialog()">Paste cells</button></div></div></dialog>
+<dialog #invoiceDialog class="invoice-dialog" (close)="previewOpen.set(false)">
+  <div class="preview-toolbar"><div><span class="eyebrow">READY TO SEND</span><h2>Invoice preview</h2></div><div class="preview-actions"><button class="btn secondary" (click)="printInvoice()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V3h10v5M7 17H4V8h16v9h-3M7 14h10v7H7zM16 11h1"/></svg>Print</button><button class="btn primary" (click)="downloadPdf()" [disabled]="pdfBusy()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>{{pdfBusy()?'Creating PDF…':'Download PDF'}}</button><button class="icon-button" (click)="closeInvoice()" aria-label="Close invoice preview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div></div>
+  <div class="preview-scroll"><ng-container *ngTemplateOutlet="invoicePaper"></ng-container></div>
+</dialog>
+<section class="print-copy"><ng-container *ngTemplateOutlet="invoicePaper"></ng-container></section>
+<ng-template #invoicePaper>
+  <article class="invoice-paper">
+    <header class="invoice-top"><img src="/paan-party-logo.png" alt="Paan Party logo"><div><h1>Invoice</h1><p>Paan Party LLC <span>|</span> {{draft().address}}</p></div></header>
+    <div class="invoice-rule"></div>
+    <section class="invoice-meta"><div class="bill-to"><h3>BILL TO</h3><p>{{draft().billTo}}</p></div><dl><div><dt>INVOICE #</dt><dd>{{draft().invoiceNo}}</dd></div><div><dt>INVOICE DATE</dt><dd>{{displayDate(draft().invoiceDate)}}</dd></div></dl></section>
+    <table class="invoice-summary"><thead><tr><th scope="col">DESCRIPTION</th><th scope="col" class="right">AMOUNT</th></tr></thead><tbody>@if(summary().meetha>0){<tr><td>{{summary().meetha | number}} Meetha Paans &#64; {{money(draft().meethaRate)}} each</td><td class="right">{{money(summary().meethaAmount)}}</td></tr>}@if(summary().flavour>0){<tr><td>{{summary().flavour | number}} Flavour Paans &#64; {{money(draft().flavourRate)}} each</td><td class="right">{{money(summary().flavourAmount)}}</td></tr>}</tbody><tfoot><tr><th scope="row">Total</th><td class="right">{{money(summary().grandTotal)}}</td></tr></tfoot></table>
+    <h3 class="delivery-details-title">Delivery details:</h3>
+    <table class="invoice-deliveries"><thead><tr><th scope="col">Date</th><th scope="col" class="right">Meetha quantity</th><th scope="col" class="right">Flavour quantity</th><th scope="col" class="right">Amount</th></tr></thead><tbody>@for(row of deliveries();track row.id){<tr><td>{{displayDate(row.date)}}</td><td class="right">{{row.meetha | number}}</td><td class="right">{{row.flavour | number}}</td><td class="right">{{money(amount(row))}}</td></tr>}</tbody><tfoot><tr><th scope="row">Total</th><td class="right">{{summary().meetha | number}}</td><td class="right">{{summary().flavour | number}}</td><td class="right">{{money(summary().grandTotal)}}</td></tr></tfoot></table>
+    <footer class="invoice-footer"><em>Thank You,</em><strong>Paan Party</strong><p class="payment-instructions">For cheque pay to PAAN PARTY LLC or Zelle to paanparty.atl&#64;gmail.com</p></footer>
+  </article>
+</ng-template>
+@if(notice()){<div class="toast" role="status">{{notice()}}</div>}
