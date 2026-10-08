@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { Invoice, totals, rowAmount, validDate, invoiceError } from './model';
+import { Invoice, totals, rowAmount, validDate, invoiceError, invoiceFilename } from './model';
 const teal:[number,number,number]=[77,140,139];
 const dark:[number,number,number]=[49,95,98];
 const pale:[number,number,number]=[215,234,234];
@@ -36,7 +36,11 @@ export function createInvoicePdf(invoice:Invoice,logo:string,fonts:PdfFonts):jsP
   doc.setFontSize(9);
   if(s.meetha){cell(`${count(s.meetha)} Meetha Paans @ ${currency(invoice.meethaRate)} each`,20,y,132,9,null,text);cell(currency(s.meethaAmount),152,y,38,9,null,text,false,true);y+=9;}
   if(s.flavour){cell(`${count(s.flavour)} Flavour Paans @ ${currency(invoice.flavourRate)} each`,20,y,132,9,null,text);cell(currency(s.flavourAmount),152,y,38,9,null,text,false,true);y+=9;}
-  cell('Total',20,y,132,9,pale,dark,true);cell(currency(s.grandTotal),152,y,38,9,pale,dark,true,true);y+=27;
+  if(s.previousBalance){
+    cell('Paan subtotal',20,y,132,9,null,text);cell(currency(s.subtotal),152,y,38,9,null,text,false,true);y+=9;
+    cell('Previous balance',20,y,132,9,null,text);cell(currency(s.previousBalance),152,y,38,9,null,text,false,true);y+=9;
+  }
+  cell('Grand total',20,y,132,9,pale,dark,true);cell(currency(s.grandTotal),152,y,38,9,pale,dark,true,true);y+=27;
   const detailHeader=()=>{
     doc.setFont('helvetica','bold');doc.setTextColor(...dark);doc.setFontSize(9);doc.text('Delivery details:',20,y);y+=3;
     doc.setFontSize(8);cell('Date',20,y,50,9,teal,[255,255,255],true);cell('Meetha quantity',70,y,42,9,teal,[255,255,255],true,true);cell('Flavour quantity',112,y,42,9,teal,[255,255,255],true,true);cell('Amount',154,y,36,9,teal,[255,255,255],true,true);y+=9;
@@ -48,7 +52,7 @@ export function createInvoicePdf(invoice:Invoice,logo:string,fonts:PdfFonts):jsP
   }
   if(y+8>263){doc.addPage();y=24;detailHeader();}
   const mauve:[number,number,number]=[169,155,159];
-  cell('Total',20,y,50,8,mauve,[255,255,255],true);cell(count(s.meetha),70,y,42,8,mauve,[255,255,255],true,true);cell(count(s.flavour),112,y,42,8,mauve,[255,255,255],true,true);cell(currency(s.grandTotal),154,y,36,8,mauve,[255,255,255],true,true);y+=18;
+  cell('Delivery total',20,y,50,8,mauve,[255,255,255],true);cell(count(s.meetha),70,y,42,8,mauve,[255,255,255],true,true);cell(count(s.flavour),112,y,42,8,mauve,[255,255,255],true,true);cell(currency(s.subtotal),154,y,36,8,mauve,[255,255,255],true,true);y+=18;
   doc.setFont('helvetica','normal');doc.setFontSize(8.5);
   const paymentLines=doc.splitTextToSize('For cheque pay to PAAN PARTY LLC or Zelle to paanparty.atl@gmail.com',170);
   const footerHeight=21+(paymentLines.length-1)*4;
@@ -65,5 +69,5 @@ export async function downloadInvoice(invoice:Invoice){
     const res=await fetch('/fonts/'+name);if(!res.ok)throw new Error('Invoice font unavailable.');const blob=await res.blob();
     return new Promise<string>((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(blob);});
   }));
-  const pdf=createInvoicePdf(invoice,logo,{regular:fontData[0],bold:fontData[1],italic:fontData[2]});const name=invoice.invoiceNo.replace(/[^a-z0-9_-]/gi,'-').slice(0,80)||'invoice';pdf.save(`Paan-Party-Invoice-${name}.pdf`);
+  const pdf=createInvoicePdf(invoice,logo,{regular:fontData[0],bold:fontData[1],italic:fontData[2]});pdf.save(invoiceFilename(invoice));
 }

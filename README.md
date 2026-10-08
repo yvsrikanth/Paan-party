@@ -26,14 +26,17 @@ Checks cover rate validation and cent-accurate totals, Excel clipboard parsing a
 
 The app can be shared to Android and iPhone and added to each phone's home screen after HTTPS deployment. Choose **Install / share** for installation instructions and the share link. See [HOME-SCREEN.md](HOME-SCREEN.md). An internet connection is required; invoices remain separate for each approved sign-in.
 
-1. Enter Bill to, invoice number and date.
+1. Enter Bill to and the invoice date. The invoice number is filled automatically as YYYYMMDD-01, -02 and so on, continuing after the highest saved number for that date. The date sequence starts at 01 for a new day. You can override the number manually.
 2. Set Rates per paan in Invoice details, then enter dated whole-number quantities. Rates are saved with each invoice and reused for the next new invoice; earlier invoices without rate fields keep $2/$3.
 3. Drag a selected date cell's bottom corner over following rows to fill consecutive dates. On phones or keyboards, select a date and use Fill dates, choosing the count and interval; this can add more rows.
 4. Add/delete deliveries. Drag a row number to reorder, or focus it and use the up/down arrow keys.
-5. Generate invoice to preview, download PDF or print.
-6. Changes save automatically. New invoice saves the current invoice before starting another. Saved invoices reopens earlier records.
+5. Enter an optional **Previous balance ($)** in Invoice details. The invoice shows the paan subtotal and previous balance separately, then adds them to the grand total. A new invoice starts at $0; an older saved invoice without this field also starts at $0.
+6. Generate invoice to preview, download PDF or print. The invoice is saved before preview or download so it uses its assigned number. The PDF is named **Billing name-Invoice number.pdf**, for example **Firefly Alpharetta-20261008-01.pdf**. Characters that cannot be used in filenames are replaced with hyphens.
+7. Changes save automatically. New invoice saves the current invoice before starting another. Saved invoices reopens earlier records.
 
-Reset asks for confirmation, then clears the current invoice's customer, invoice number, delivery dates, quantities and totals, and returns the invoice date to today. It saves this cleared invoice while keeping its rates, business address and other saved invoices.
+Reset asks for confirmation, then clears the current invoice's customer, delivery dates, quantities, previous balance and totals, returns the invoice date to today, and generates a new invoice number. It saves this cleared invoice while keeping its rates, business address and other saved invoices.
+
+Automatic numbers are assigned in the same database write that saves the invoice, keeping simultaneous saves on two phones from claiming the same number for the same sign-in. The sequence follows the invoice date when the number is assigned; later edits keep that number. Existing invoices keep their numbers. This update uses the existing invoice table and needs no additional database migration. An older app tab that does not send the new balance field preserves a previously saved balance; explicitly entering $0 clears it.
 
 Copy a rectangular Excel range and paste into the first target Date, Meetha or Flavour cell. Columns follow Date, Meetha, Flavour; extra rows are added automatically. Paste cells opens a text box for phones or browsers where direct date-cell paste is unavailable. Copy entries copies the ledger, including headings, back to Excel.
 

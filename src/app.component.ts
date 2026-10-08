@@ -1,7 +1,7 @@
 import { Component, computed, signal, HostListener, ElementRef, ViewChild, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Invoice, Delivery, newInvoice, newRow, totals, rowAmount, rateValid, ledgerError, invoiceError, filledRows, addDays, validDate, today, cleanInvoice, MEETHA_PRICE, FLAVOUR_PRICE } from './model';
+import { Invoice, Delivery, newInvoice, nextInvoiceNumber, newRow, totals, rowAmount, rateValid, previousBalanceValid, ledgerError, invoiceError, filledRows, addDays, validDate, today, cleanInvoice, MEETHA_PRICE, FLAVOUR_PRICE } from './model';
 import { LedgerColumn, ExcelDateOrder, pasteLedgerCells, copyLedgerCells } from './clipboard';
 import { InstallPromptEvent, appHomeUrl, runningAsApp } from './mobile-app';
 
@@ -46,6 +46,7 @@ export class AppComponent implements OnInit,OnDestroy {
   revision=0;
   private editVersion=0;
   private savedEditVersion=0;
+  private numberPending=true;
   private timer:ReturnType<typeof setTimeout>|undefined;
   private noticeTimer:ReturnType<typeof setTimeout>|undefined;
   private savingPromise:Promise<boolean>|undefined;
@@ -58,6 +59,7 @@ export class AppComponent implements OnInit,OnDestroy {
   @ViewChild('resetDialog') resetDialog!:ElementRef<HTMLDialogElement>;
   @ViewChild('installDialog') installDialog!:ElementRef<HTMLDialogElement>;
   validRate=rateValid;
+  validBalance=previousBalanceValid;
   amount(row:Delivery) {return rowAmount(row,this.draft());}
   money(n:number) {return Number.isFinite(n)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(n):'—';}
   displayDate(s:string) {return validDate(s)?new Intl.DateTimeFormat('en-US',{day:'2-digit',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(s+'T12:00:00Z')):'—';}
@@ -111,7 +113,7 @@ export class AppComponent implements OnInit,OnDestroy {
   }
   async loadInvoice(id:string) {
     const data=await this.request('/api/invoices/'+encodeURIComponent(id));
-    this.draft.set(cleanInvoice(data.invoice));this.revision=data.revision;
+    this.draft.set(cleanInvoice(data.invoice));this.revision=data.revision;this.numberPending=false;
     this.editVersion=0;this.savedEditVersion=0;this.state.set('saved');this.saveError.set('');this.focusCell(0,'date');
   }
   async switchInvoice(id:string) {
@@ -124,10 +126,16 @@ export class AppComponent implements OnInit,OnDestroy {
   change(doc:Invoice) {
     this.draft.set(doc);this.editVersion++;this.state.set('changed');this.saveError.set('');
     clearTimeout(this.timer);
-    if(rateValid(doc.meethaRate)&&rateValid(doc.flavourRate)&&!doc.rows.some(r=>!Number.isInteger(r.meetha)||r.meetha<0||r.meetha>1000000||!Number.isInteger(r.flavour)||r.flavour<0||r.flavour>1000000)) this.timer=setTimeout(()=>void this.saveNow(),750);
+    if(rateValid(doc.meethaRate)&&rateValid(doc.flavourRate)&&previousBalanceValid(doc.previousBalance)&&!doc.rows.some(r=>!Number.isInteger(r.meetha)||r.meetha<0||r.meetha>1000000||!Number.isInteger(r.flavour)||r.flavour<0||r.flavour>1000000)) this.timer=setTimeout(()=>void this.saveNow(),750);
   }
-  field(key:'billTo'|'invoiceNo'|'invoiceDate'|'address',value:string) {this.change({...this.draft(),[key]:value});}
+  field(key:'billTo'|'invoiceNo'|'invoiceDate'|'address',value:string) {
+    const draft={...this.draft(),[key]:value};
+    if(key==='invoiceNo')this.numberPending=false;
+    if(key==='invoiceDate'&&this.numberPending&&validDate(value))draft.invoiceNo=nextInvoiceNumber(this.saved().map(item=>item.invoiceNo),value);
+    this.change(draft);
+  }
   rateField(key:'meethaRate'|'flavourRate',value:number|null) {this.change({...this.draft(),[key]:value===null?NaN:Number(value)});}
+  balanceField(value:number|null) {this.change({...this.draft(),previousBalance:value===null?0:Number(value)});}
   focusCell(index:number,column:LedgerColumn) {this.activeDate.set(index);this.activeColumn.set(column);}
   columnLabel(column:LedgerColumn) {return column==='date'?'Date':column==='meetha'?'Meetha':'Flavour';}
   pasteCells(event:ClipboardEvent,id:string,column:LedgerColumn) {
@@ -227,9 +235,12 @@ export class AppComponent implements OnInit,OnDestroy {
       try{
         while(this.editVersion!==this.savedEditVersion){
           const version=this.editVersion;const invoice=cleanInvoice(structuredClone(this.draft()));this.state.set('saving');
-          const res=await this.request('/api/invoices/'+invoice.id,{method:'PUT',body:JSON.stringify({invoice,revision:this.revision})});
+          const res=await this.request('/api/invoices/'+invoice.id,{method:'PUT',body:JSON.stringify({invoice,revision:this.revision,autoNumber:this.numberPending})});
           this.revision=res.revision;this.savedEditVersion=version;
-          const item={id:invoice.id,billTo:invoice.billTo,invoiceNo:invoice.invoiceNo,updatedAt:res.updatedAt};
+          const invoiceNo=typeof res.invoiceNo==='string'?res.invoiceNo:invoice.invoiceNo;
+          if(this.draft().invoiceNo===invoice.invoiceNo||this.numberPending)this.draft.update(d=>({...d,invoiceNo}));
+          this.numberPending=false;
+          const item={id:invoice.id,billTo:invoice.billTo,invoiceNo,updatedAt:res.updatedAt};
           this.saved.update(s=>[item,...s.filter(i=>i.id!==item.id)]);
         }
         this.state.set('saved');return true;
@@ -244,7 +255,8 @@ export class AppComponent implements OnInit,OnDestroy {
     try{
       if(this.savingPromise)await this.savingPromise;
       const current=this.draft();
-      this.change({...current,billTo:'',invoiceNo:'',invoiceDate:today(),meethaRate:rateValid(current.meethaRate)?current.meethaRate:MEETHA_PRICE,flavourRate:rateValid(current.flavourRate)?current.flavourRate:FLAVOUR_PRICE,rows:Array.from({length:5},()=>newRow())});
+      this.numberPending=true;
+      this.change({...current,billTo:'',invoiceNo:nextInvoiceNumber(this.saved().map(item=>item.invoiceNo)),invoiceDate:today(),previousBalance:0,meethaRate:rateValid(current.meethaRate)?current.meethaRate:MEETHA_PRICE,flavourRate:rateValid(current.flavourRate)?current.flavourRate:FLAVOUR_PRICE,rows:Array.from({length:5},()=>newRow())});
       this.drag.set(null);this.reorderId='';this.focusCell(0,'date');this.fillOpen.set(false);this.fillCount=5;this.fillStep=1;this.clipboardText.set('');this.clipboardError.set('');
       const saved=await this.saveNow();
       this.resetDialog.nativeElement.close();
@@ -254,12 +266,18 @@ export class AppComponent implements OnInit,OnDestroy {
   async confirmNew(){
     this.newDialog.nativeElement.close();
     if(!await this.saveNow()){this.toast('Save this invoice before starting another.');return;}
-    const used=this.saved().map(i=>i.invoiceNo);const rates=this.draft();let sequence=1;let d=newInvoice(sequence,rates);
-    while(used.includes(d.invoiceNo)){d=newInvoice(++sequence,rates);}
-    this.draft.set(d);this.revision=0;this.editVersion=0;this.savedEditVersion=0;this.state.set('new');this.focusCell(0,'date');this.fillOpen.set(false);
+    this.loading.set(true);
+    try{
+      const data=await this.request('/api/invoices');this.saved.set(data.invoices);
+      const d=newInvoice(1,this.draft());d.invoiceNo=nextInvoiceNumber(data.invoices.map((item:SavedInvoice)=>item.invoiceNo),d.invoiceDate);
+      this.draft.set(d);this.revision=0;this.numberPending=true;this.editVersion=0;this.savedEditVersion=0;this.state.set('new');this.focusCell(0,'date');this.fillOpen.set(false);
+    }catch(e){this.toast(this.message(e));}
+    finally{this.loading.set(false);}
   }
-  openInvoice(){
+  async openInvoice(){
     const err=invoiceError(this.draft());if(err){this.toast(err);return;}
+    if(this.previewOpen()||!await this.saveNow())return;
+    if(this.previewOpen())return;
     this.previewOpen.set(true);this.dialog.nativeElement.showModal();
   }
   closeInvoice(){this.dialog.nativeElement.close();this.previewOpen.set(false);}
@@ -268,7 +286,7 @@ export class AppComponent implements OnInit,OnDestroy {
     if(this.pdfBusy())return;
     const err=invoiceError(this.draft());if(err){this.toast(err);return;}
     this.pdfBusy.set(true);
-    try{const {downloadInvoice}=await import('./invoice-pdf');await downloadInvoice(structuredClone(this.draft()));this.toast('Invoice PDF downloaded.');}
+    try{if(!await this.saveNow())return;const {downloadInvoice}=await import('./invoice-pdf');await downloadInvoice(structuredClone(this.draft()));this.toast('Invoice PDF downloaded.');}
     catch(e){this.toast('The PDF could not be created. Please try again.');console.error(e);}
     finally{this.pdfBusy.set(false);}
   }
